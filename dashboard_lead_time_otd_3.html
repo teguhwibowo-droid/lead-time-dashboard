@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Lead Time OTD — Pareto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6fb; --surface:#ffffff; --border:#e4e9f2;
+    --text:#131a2b; --text-dim:#5b667a; --text-faint:#8b95a8;
+    --navy:#1a2e6b; --navy-soft:#233a82;
+    --accent:#2563eb; --accent-soft:#e8effe;
+    --land:#2563eb; --sea:#0891b2;
+    --green:#16a34a; --amber:#d97706; --red:#dc2626;
+    --radius:14px; --shadow:0 1px 2px rgba(20,30,60,.04), 0 8px 24px -12px rgba(20,30,60,.10);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+  ::-webkit-scrollbar{width:7px;height:7px;} ::-webkit-scrollbar-thumb{background:#c7cfe0;border-radius:8px;}
+
+  .topbar{background:linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%); padding:20px 26px; color:#fff; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;}
+  .topbar h1{margin:0; font-size:18px; font-weight:800; letter-spacing:-.01em;}
+  .topbar .sub{margin:3px 0 0; font-size:12px; color:#c3cdec; font-weight:500;}
+  .topbar-right{display:flex; align-items:center; gap:10px;}
+  .status-pill{display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14); padding:6px 12px; border-radius:99px; font-size:11px; color:#dbe3f7; font-weight:500;}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+  .status-dot.loading{background:var(--amber); animation:pulse 1.2s infinite;}
+  .status-dot.error{background:var(--red);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .btn-refresh{background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); color:#fff; padding:7px 14px; border-radius:9px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; font-family:inherit;}
+  .btn-refresh:hover{background:rgba(255,255,255,.18);}
+  .btn-refresh svg{width:13px;height:13px;}
+  .moda-switch{display:flex; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14); border-radius:11px; padding:3px;}
+  .moda-switch button{border:none; background:transparent; color:#c3cdec; font-family:inherit; font-weight:700; font-size:12.5px; padding:8px 16px; border-radius:8px; cursor:pointer;}
+  .moda-switch button.active{background:#fff; color:var(--navy);}
+
+  .wrap{max-width:1180px; margin:0 auto; padding:20px 24px 60px; display:flex; flex-direction:column; gap:16px;}
+
+  /* ---- Global filter bar ---- */
+  .filterbar{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px 14px; display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; box-shadow:var(--shadow);}
+  .filter-group{display:flex; flex-direction:column; gap:4px;}
+  .filter-group label{font-size:10px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em;}
+  .filter-group .date-pair{display:flex; align-items:center; gap:5px;}
+  .filter-group .date-pair input[type=date]{border:1px solid var(--border); background:#f8f9fc; padding:7px 8px; border-radius:8px; font-family:inherit; font-size:11.5px; color:var(--text); width:126px;}
+  .filter-group .date-pair span{color:var(--text-faint); font-size:11px;}
+  .msel{position:relative;}
+  .msel-btn{display:flex; align-items:center; gap:7px; background:#f8f9fc; border:1px solid var(--border); padding:7px 11px; border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; color:var(--text); cursor:pointer; min-width:130px; justify-content:space-between;}
+  .msel-btn:hover{border-color:#c7cfe0;}
+  .msel-btn .count-badge{background:var(--accent); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:99px; margin-left:4px;}
+  .msel-btn svg{width:11px; height:11px; flex-shrink:0; color:var(--text-faint);}
+  .msel-panel{display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:40; background:#fff; border:1px solid var(--border); border-radius:11px; box-shadow:0 12px 32px -8px rgba(20,30,60,.22); width:230px; max-height:300px; overflow:hidden; flex-direction:column;}
+  .msel.open .msel-panel{display:flex;}
+  .msel-search{border:none; border-bottom:1px solid var(--border); padding:9px 11px; font-family:inherit; font-size:12px; outline:none; width:100%;}
+  .msel-actions{display:flex; gap:6px; padding:6px 9px; border-bottom:1px solid var(--border);}
+  .msel-actions button{border:none; background:var(--accent-soft); color:var(--accent); font-size:10px; font-weight:700; padding:4px 8px; border-radius:6px; cursor:pointer; font-family:inherit;}
+  .msel-list{overflow-y:auto; padding:4px;}
+  .msel-item{display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px;}
+  .msel-item:hover{background:#f4f6fb;}
+  .msel-item input{accent-color:var(--accent);}
+  .msel-item .cnt{margin-left:auto; color:var(--text-faint); font-size:10px; font-family:'JetBrains Mono',monospace;}
+  .btn-reset-filter{background:transparent; border:1px dashed #c7cfe0; color:var(--text-dim); font-size:11.5px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; font-family:inherit; height:fit-content;}
+  .btn-reset-filter:hover{border-color:var(--accent); color:var(--accent);}
+  .filter-count{margin-left:auto; font-size:11.5px; color:var(--text-faint); align-self:center; font-weight:600;}
+  .filter-count b{color:var(--text);}
+  .err-box{background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:14px 18px; border-radius:12px; font-size:13px; font-weight:500; display:none;}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(5,1fr); gap:12px;}
+  .kpi-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow);}
+  .kpi-card .kpi-label{font-size:10px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:7px;}
+  .kpi-card .kpi-val{font-size:21px; font-weight:800; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;}
+  .kpi-card .kpi-sub{font-size:11px; color:var(--text-dim); margin-top:3px; font-weight:500;}
+
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
+  .panel-head{display:flex; align-items:center; justify-content:space-between; padding:15px 18px 4px; flex-wrap:wrap; gap:10px;}
+  .panel-head h2{font-size:14px; font-weight:800; margin:0;}
+  .panel-head .desc{font-size:11.5px; color:var(--text-faint); margin-top:2px; font-weight:500;}
+  .sort-toggle{display:flex; background:#f1f3f9; border-radius:9px; padding:3px; gap:2px;}
+  .sort-toggle button{border:none; background:transparent; font-family:inherit; font-size:11px; font-weight:700; padding:6px 11px; border-radius:7px; cursor:pointer; color:var(--text-dim);}
+  .sort-toggle button.active{background:#fff; color:var(--accent); box-shadow:0 1px 2px rgba(20,30,60,.08);}
+  .chart-box{padding:12px 14px 18px; height:300px; position:relative;}
+  .empty-state{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-faint); gap:6px; font-size:13px;}
+
+  .search-row{padding:12px 18px 0;}
+  .search-row input{width:100%; border:1px solid var(--border); background:#f8f9fc; padding:9px 13px; border-radius:9px; font-family:inherit; font-size:12.5px; outline:none;}
+  .search-row input:focus{border-color:var(--accent);}
+
+  /* Accordion tree */
+  .acc-root{padding:6px 0 10px;}
+  .acc-row{display:flex; align-items:center; gap:9px; padding:10px 16px; cursor:pointer; border-top:1px solid #f0f2f8;}
+  .acc-row:hover{background:#f8f9fd;}
+  .acc-row.expanded{background:var(--accent-soft);}
+  .chevron{width:14px; flex-shrink:0; color:var(--text-faint); font-size:10px; transition:transform .1s;}
+  .acc-icon{flex-shrink:0; font-size:13px; width:18px; text-align:center;}
+  .acc-name{flex:1; font-weight:700; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .acc-name .arrow-sep{color:var(--text-faint); font-weight:400; margin:0 4px;}
+  .acc-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-faint); flex-shrink:0;}
+  .acc-avg{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--accent); background:var(--accent-soft); padding:2px 7px; border-radius:99px; flex-shrink:0;}
+  .acc-detail{background:#fbfcfe; border-top:1px dashed var(--border); border-bottom:1px solid #f0f2f8;}
+  .mini-kpi{display:flex; gap:18px; padding:12px 16px 0; flex-wrap:wrap;}
+  .mini-kpi .mk{font-size:11.5px; color:var(--text-dim);}
+  .mini-kpi .mk b{font-family:'JetBrains Mono',monospace; color:var(--text); font-size:12.5px; font-weight:700;}
+  .mini-chart-box{height:190px; padding:8px 12px 14px; position:relative;}
+  .no-more{padding:10px 16px 14px; font-size:11px; color:var(--text-faint); font-style:italic;}
+
+  .loading-overlay{position:fixed; inset:0; background:rgba(244,246,251,.9); z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px;}
+  .spinner{width:34px; height:34px; border:3px solid #dbe3f7; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-overlay p{font-size:13px; font-weight:600; color:var(--text-dim); margin:0;}
+
+  @media (max-width:900px){ .kpi-row{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p id="loadingText">Memuat data pengiriman…</p>
+</div>
+
+<div class="topbar">
+  <div>
+    <h1>Lead Time OTD — Pareto Dashboard</h1>
+    <p class="sub">Klik Origin → Rute → Vendor → Armada untuk lihat Pareto tiap level</p>
+  </div>
+  <div class="topbar-right">
+    <div class="moda-switch" id="modaSwitch">
+      <button data-moda="LAND" class="active">🚚 LAND</button>
+      <button data-moda="SEA">🚢 SEA</button>
+    </div>
+    <div class="status-pill"><span class="status-dot loading" id="statusDot"></span><span id="statusText">Memuat…</span></div>
+    <button class="btn-refresh" id="refreshBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="err-box" id="errBox"></div>
+
+  <div class="filterbar" id="filterBar">
+    <div class="filter-group"><label>Asal</label><div class="msel" id="msel_asal"></div></div>
+    <div class="filter-group"><label>Tujuan</label><div class="msel" id="msel_tujuan"></div></div>
+    <div class="filter-group"><label>Tanggal Stuffing</label>
+      <div class="date-pair"><input type="date" id="stuffFrom"><span>–</span><input type="date" id="stuffTo"></div>
+    </div>
+    <div class="filter-group"><label>Bulan Stuffing</label><div class="msel" id="msel_stuffMonth"></div></div>
+    <div class="filter-group"><label>Tanggal Target SLA</label>
+      <div class="date-pair"><input type="date" id="slaFrom"><span>–</span><input type="date" id="slaTo"></div>
+    </div>
+    <div class="filter-group"><label>Bulan Target SLA</label><div class="msel" id="msel_slaMonth"></div></div>
+    <button class="btn-reset-filter" id="resetFilterBtn">↺ Reset Filter</button>
+    <div class="filter-count" id="filterCount"></div>
+  </div>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 id="totalTitle">Pareto Total — LAND</h2>
+        <p class="desc">Jumlah kejadian pada tiap nilai lead time (hari) — seluruh data</p>
+      </div>
+      <div class="sort-toggle" id="sortToggle">
+        <button data-sort="trend" class="active">Trend (urut hari)</button>
+        <button data-sort="pareto">Pareto klasik (urut frekuensi)</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="totalChart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Breakdown per Rute</h2>
+        <p class="desc" id="breakdownDesc">Dikelompokkan per Origin → Tujuan → Vendor → Type Armada. Klik baris untuk buka Pareto-nya.</p>
+      </div>
+    </div>
+    <div class="search-row"><input id="treeSearch" placeholder="Cari origin, tujuan, vendor, atau armada…"></div>
+    <div class="acc-root" id="accRoot"></div>
+  </div>
+
+  <p style="text-align:center; font-size:11px; color:var(--text-faint); margin:4px 0 0;">Data live dari Google Sheets · Kolom Lead Time = kolom AL</p>
+</div>
+
+<script>
+const CONFIG = {
+  CSV_URL: 'https://docs.google.com/spreadsheets/d/1S93bDhZDka93Fq7YE4YZeuAJb4zw2WqHA1Iw_EuWqLY/gviz/tq?tqx=out:csv&gid=1697954294',
+};
+
+// ---------- CSV parsing ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if(inQuotes){
+      if(c === '"' && n === '"'){ field+='"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\r'){ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+// ---------- Date parsing (format: "5 Jan 26 16:00" or "5 Jan 26") ----------
+const MONTH_MAP = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function parseDateStr(str){
+  if(!str) return null;
+  str = str.trim();
+  if(!str) return null;
+  const m = str.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2,4})/);
+  if(!m) return null;
+  const day = parseInt(m[1],10);
+  const mon = MONTH_MAP[m[2]];
+  if(mon === undefined) return null;
+  let year = parseInt(m[3],10);
+  if(year < 100) year += 2000;
+  const monthKey = year + '-' + String(mon+1).padStart(2,'0');
+  const monthLabel = MONTH_NAMES[mon] + ' ' + year;
+  const ymd = year + '-' + String(mon+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  return { monthKey, monthLabel, ymd };
+}
+
+// ---------- State ----------
+let RECORDS = [];
+let currentModa = 'LAND';
+let sortMode = 'trend';
+let expandedPaths = new Set();   // path keys like "Jakarta||Balikpapan||SPA"
+let searchTerm = '';
+let chartRegistry = {};          // pathKey -> Chart instance ('__total__' for the top chart)
+
+// global filters
+const filters = {
+  asal: new Set(), tujuan: new Set(),
+  stuffFrom: '', stuffTo: '', stuffMonth: new Set(),
+  slaFrom: '', slaTo: '', slaMonth: new Set(),
+};
+
+const LEVEL_FIELD = { port:'port', tujuan:'tujuan', vendor:'vendor', armada:'armada' };
+const LEVEL_ICON  = { port:'📍', tujuan:'🎯', vendor:'🚛', armada:'🔧' };
+
+function levelsForModa(){ return currentModa === 'LAND' ? ['port','tujuan','vendor','armada'] : ['port','tujuan','vendor']; }
+
+// ---------- Load data ----------
+async function loadData(){
+  setStatus('loading', 'Memuat…');
+  document.getElementById('errBox').style.display = 'none';
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  try{
+    const res = await fetch(CONFIG.CSV_URL + (CONFIG.CSV_URL.includes('?') ? '&' : '?') + 'cachebust=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const header = rows[0].map(h => h.trim());
+    const idx = name => header.indexOf(name);
+    const iVendor = idx('Vendor'), iTujuan = idx('Tujuan'), iModa = idx('Moda'), iType = idx('TYPE'), iLT = idx('Lead Time');
+    const iPort = ['Origin','Port','Asal','Origin Port','Port Origin'].map(idx).find(i => i > -1) ?? -1;
+    const iStuff = idx('Req Stuffing'), iSLA = idx('Target SLA');
+    if(iLT === -1) throw new Error("Kolom 'Lead Time' tidak ditemukan di header CSV");
+
+    const recs = [];
+    for(let r=1;r<rows.length;r++){
+      const row = rows[r];
+      if(!row || row.length < 2) continue;
+      let moda = (row[iModa]||'').trim().toUpperCase();
+      if(moda !== 'LAND' && moda !== 'SEA') continue;
+      const ltRaw = (row[iLT]||'').trim();
+      if(ltRaw === '') continue;
+      const lt = Number(ltRaw);
+      if(!isFinite(lt)) continue;
+      recs.push({
+        vendor: (row[iVendor]||'(Kosong)').trim() || '(Kosong)',
+        tujuan: (row[iTujuan]||'(Kosong)').trim() || '(Kosong)',
+        port: (iPort>-1 ? (row[iPort]||'') : '').trim() || '(Kosong)',
+        moda,
+        armada: (row[iType]||'(Kosong)').trim() || '(Kosong)',
+        lt,
+        stuffing: iStuff>-1 ? parseDateStr(row[iStuff]) : null,
+        sla: iSLA>-1 ? parseDateStr(row[iSLA]) : null,
+      });
+    }
+    RECORDS = recs;
+    setStatus('ok', 'Live · ' + RECORDS.length.toLocaleString('id-ID') + ' baris valid');
+    expandedPaths = new Set();
+    buildFilterOptions();
+    renderAll();
+  } catch(e){
+    console.error(e);
+    setStatus('error', 'Gagal memuat');
+    const box = document.getElementById('errBox');
+    box.style.display = 'block';
+    box.textContent = 'Gagal memuat data dari Google Sheets: ' + e.message + '. Pastikan file HTML ini diakses lewat https:// (bukan dibuka langsung dari folder lokal), dan sheet sudah di-share "Anyone with the link". Lalu klik Refresh.';
+  } finally {
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+}
+
+function setStatus(state, text){
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (state==='loading' ? ' loading' : state==='error' ? ' error' : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+// ---------- Global filters ----------
+function applyGlobalFilters(records){
+  return records.filter(r => {
+    if(filters.asal.size && !filters.asal.has(r.port)) return false;
+    if(filters.tujuan.size && !filters.tujuan.has(r.tujuan)) return false;
+    if(filters.stuffFrom || filters.stuffTo){
+      if(!r.stuffing) return false;
+      if(filters.stuffFrom && r.stuffing.ymd < filters.stuffFrom) return false;
+      if(filters.stuffTo && r.stuffing.ymd > filters.stuffTo) return false;
+    }
+    if(filters.stuffMonth.size){
+      if(!r.stuffing || !filters.stuffMonth.has(r.stuffing.monthKey)) return false;
+    }
+    if(filters.slaFrom || filters.slaTo){
+      if(!r.sla) return false;
+      if(filters.slaFrom && r.sla.ymd < filters.slaFrom) return false;
+      if(filters.slaTo && r.sla.ymd > filters.slaTo) return false;
+    }
+    if(filters.slaMonth.size){
+      if(!r.sla || !filters.slaMonth.has(r.sla.monthKey)) return false;
+    }
+    return true;
+  });
+}
+
+function getBaseRecords(){
+  const modaRecs = RECORDS.filter(r => r.moda === currentModa);
+  return applyGlobalFilters(modaRecs);
+}
+
+// ---------- Filter bar UI ----------
+function buildFilterOptions(){
+  const asalCounts = {}, tujuanCounts = {}, stuffMonthCounts = {}, slaMonthCounts = {};
+  RECORDS.forEach(r => {
+    asalCounts[r.port] = (asalCounts[r.port]||0)+1;
+    tujuanCounts[r.tujuan] = (tujuanCounts[r.tujuan]||0)+1;
+    if(r.stuffing) stuffMonthCounts[r.stuffing.monthKey] = (stuffMonthCounts[r.stuffing.monthKey]||0)+1;
+    if(r.sla) slaMonthCounts[r.sla.monthKey] = (slaMonthCounts[r.sla.monthKey]||0)+1;
+  });
+  const toOptions = (counts, sortByKey) => {
+    let opts = Object.keys(counts).map(v => ({value:v, count:counts[v]}));
+    opts.sort(sortByKey ? (a,b)=>a.value.localeCompare(b.value) : (a,b)=>b.count-a.count);
+    return opts;
+  };
+  mountMultiSelect('asal', 'Asal', toOptions(asalCounts));
+  mountMultiSelect('tujuan', 'Tujuan', toOptions(tujuanCounts));
+  const monthLabelOf = key => { const [y,m] = key.split('-'); return MONTH_NAMES[parseInt(m,10)-1] + ' ' + y; };
+  const stuffOpts = toOptions(stuffMonthCounts, true).sort((a,b)=>a.value.localeCompare(b.value)).map(o=>({value:o.value, label:monthLabelOf(o.value), count:o.count}));
+  const slaOpts = toOptions(slaMonthCounts, true).sort((a,b)=>a.value.localeCompare(b.value)).map(o=>({value:o.value, label:monthLabelOf(o.value), count:o.count}));
+  mountMultiSelect('stuffMonth', 'Bulan Stuffing', stuffOpts);
+  mountMultiSelect('slaMonth', 'Bulan Target SLA', slaOpts);
+}
+
+function mountMultiSelect(key, label, options){
+  const root = document.getElementById('msel_' + key);
+  const selectedSet = filters[key];
+  const render = () => {
+    const n = selectedSet.size;
+    root.className = 'msel' + (root.classList.contains('open') ? ' open' : '');
+    root.innerHTML = `
+      <button class="msel-btn" type="button">
+        <span>${label}${n? '' : ': Semua'}</span>
+        ${n? `<span class="count-badge">${n}</span>`:''}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="msel-panel">
+        <input class="msel-search" placeholder="Cari ${label.toLowerCase()}…">
+        <div class="msel-actions">
+          <button data-act="all">Pilih Semua</button>
+          <button data-act="none">Hapus Semua</button>
+        </div>
+        <div class="msel-list"></div>
+      </div>`;
+    const list = root.querySelector('.msel-list');
+    const drawList = (filterStr='') => {
+      list.innerHTML = '';
+      options.filter(o => (o.label||o.value).toLowerCase().includes(filterStr.toLowerCase())).forEach(o => {
+        const item = document.createElement('label');
+        item.className = 'msel-item';
+        item.innerHTML = `<input type="checkbox" ${selectedSet.has(o.value)?'checked':''}> <span>${o.label||o.value}</span> <span class="cnt">${o.count}</span>`;
+        item.querySelector('input').addEventListener('change', (e) => {
+          if(e.target.checked) selectedSet.add(o.value); else selectedSet.delete(o.value);
+          render();
+          renderAll();
+        });
+        list.appendChild(item);
+      });
+    };
+    drawList();
+    root.querySelector('.msel-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.msel.open').forEach(m => { if(m!==root) m.classList.remove('open'); });
+      root.classList.toggle('open');
+    });
+    root.querySelector('.msel-search').addEventListener('input', (e) => drawList(e.target.value));
+    root.querySelector('[data-act="all"]').addEventListener('click', () => { options.forEach(o=>selectedSet.add(o.value)); render(); renderAll(); });
+    root.querySelector('[data-act="none"]').addEventListener('click', () => { selectedSet.clear(); render(); renderAll(); });
+  };
+  render();
+}
+document.addEventListener('click', () => document.querySelectorAll('.msel.open').forEach(m => m.classList.remove('open')));
+
+function updateFilterCount(){
+  const total = RECORDS.filter(r=>r.moda===currentModa).length;
+  const filtered = getBaseRecords().length;
+  document.getElementById('filterCount').innerHTML = `Menampilkan <b>${filtered.toLocaleString('id-ID')}</b> dari <b>${total.toLocaleString('id-ID')}</b> data ${currentModa}`;
+}
+
+function resetAllFilters(){
+  filters.asal.clear(); filters.tujuan.clear();
+  filters.stuffMonth.clear(); filters.slaMonth.clear();
+  filters.stuffFrom = ''; filters.stuffTo = ''; filters.slaFrom = ''; filters.slaTo = '';
+  document.getElementById('stuffFrom').value = ''; document.getElementById('stuffTo').value = '';
+  document.getElementById('slaFrom').value = ''; document.getElementById('slaTo').value = '';
+  buildFilterOptions();
+  renderAll();
+}
+
+document.getElementById('stuffFrom').addEventListener('change', e => { filters.stuffFrom = e.target.value; renderAll(); });
+document.getElementById('stuffTo').addEventListener('change', e => { filters.stuffTo = e.target.value; renderAll(); });
+document.getElementById('slaFrom').addEventListener('change', e => { filters.slaFrom = e.target.value; renderAll(); });
+document.getElementById('slaTo').addEventListener('change', e => { filters.slaTo = e.target.value; renderAll(); });
+document.getElementById('resetFilterBtn').addEventListener('click', resetAllFilters);
+
+// ---------- Stats helpers ----------
+function median(arr){
+  const s = [...arr].sort((a,b)=>a-b);
+  const n = s.length; if(!n) return 0;
+  const mid = Math.floor(n/2);
+  return n%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+function statsOf(records){
+  const lts = records.map(r=>r.lt);
+  const total = lts.length;
+  const avg = total ? lts.reduce((a,b)=>a+b,0)/total : 0;
+  return { total, avg, median: median(lts), max: total? Math.max(...lts):0 };
+}
+function computePareto(records){
+  const counts = {};
+  records.forEach(r => { counts[r.lt] = (counts[r.lt]||0)+1; });
+  let entries = Object.keys(counts).map(k => ({lt:Number(k), count:counts[k]}));
+  const total = records.length;
+  if(sortMode === 'trend') entries.sort((a,b)=>a.lt-b.lt);
+  else entries.sort((a,b)=>b.count-a.count || a.lt-b.lt);
+  let cum = 0;
+  entries.forEach(e => { cum += e.count; e.pct = total? (e.count/total*100):0; e.cum = total? (cum/total*100):0; });
+  return entries;
+}
+
+// ---------- KPI (overall) ----------
+function renderKPIs(records){
+  const row = document.getElementById('kpiRow');
+  const s = statsOf(records);
+  const counts = {};
+  records.forEach(r => counts[r.lt]=(counts[r.lt]||0)+1);
+  let modeVal='-', modeCount=0;
+  Object.keys(counts).forEach(k=>{ if(counts[k]>modeCount){modeCount=counts[k]; modeVal=k;} });
+  const modePct = s.total ? (modeCount/s.total*100) : 0;
+  const accent = currentModa === 'LAND' ? 'var(--land)' : 'var(--sea)';
+  const cards = [
+    {label:'Total Shipment', val: s.total.toLocaleString('id-ID'), sub: currentModa + ' · sesuai filter'},
+    {label:'Rata-rata Lead Time', val: s.avg.toFixed(1) + ' hari', sub:'mean'},
+    {label:'Median Lead Time', val: s.median.toFixed(1) + ' hari', sub:'nilai tengah'},
+    {label:'Lead Time Terbanyak', val: modeVal + ' hari', sub: modeCount.toLocaleString('id-ID') + ' kejadian (' + modePct.toFixed(1) + '%)'},
+    {label:'Lead Time Maks', val: s.max + ' hari', sub:'nilai tertinggi'},
+  ];
+  row.innerHTML = cards.map(c => `
+    <div class="kpi-card"><div class="kpi-label">${c.label}</div><div class="kpi-val" style="color:${accent}">${c.val}</div><div class="kpi-sub">${c.sub}</div></div>`).join('');
+}
+
+// ---------- Chart rendering (shared) ----------
+function drawChart(canvasId, entries, key){
+  if(chartRegistry[key]){ chartRegistry[key].destroy(); delete chartRegistry[key]; }
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const box = canvas.parentElement;
+  if(!entries.length){
+    box.innerHTML = '<div class="empty-state" style="font-size:12px;"><span style="font-size:20px;">📭</span>Tidak ada data</div>';
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  const barColor = currentModa === 'LAND' ? '#2563eb' : '#0891b2';
+  const lineColor = '#d97706';
+  const data = {
+    labels: entries.map(e => e.lt),
+    datasets: [
+      { type:'bar', label:'Jumlah Kejadian', data: entries.map(e=>e.count), backgroundColor: barColor + 'cc', borderRadius:3, yAxisID:'y', order:2 },
+      { type:'line', label:'% Kumulatif', data: entries.map(e=>e.cum), borderColor: lineColor, backgroundColor: lineColor, borderWidth:2, pointRadius:2.5, pointBackgroundColor:'#fff', pointBorderColor: lineColor, pointBorderWidth:1.5, tension:.25, yAxisID:'y1', order:1 }
+    ]
+  };
+  chartRegistry[key] = new Chart(ctx, {
+    data,
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{position:'top', align:'end', labels:{boxWidth:9, font:{family:"'Plus Jakarta Sans'", size:10, weight:600}, usePointStyle:true, padding:8}},
+        tooltip:{ backgroundColor:'#131a2b', padding:9, cornerRadius:8, titleFont:{family:"'Plus Jakarta Sans'", weight:700, size:11}, bodyFont:{family:"'JetBrains Mono'", size:11},
+          callbacks:{ title:(items)=>'Lead Time: '+items[0].label+' hari', label:(item)=> item.dataset.yAxisID==='y1' ? '% Kumulatif: '+item.parsed.y.toFixed(1)+'%' : 'Kejadian: '+item.parsed.y.toLocaleString('id-ID') } }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{family:"'JetBrains Mono'", size:9.5}} },
+        y:{ position:'left', grid:{color:'#eef1f8'}, beginAtZero:true, ticks:{font:{family:"'JetBrains Mono'", size:9.5}} },
+        y1:{ position:'right', grid:{display:false}, min:0, max:100, ticks:{callback:v=>v+'%', font:{family:"'JetBrains Mono'", size:9.5}} },
+      }
+    }
+  });
+}
+
+// ---------- Accordion tree ----------
+function sanitizeId(s){ return 'c' + s.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 120) + '_' + s.length; }
+
+function matchesSearch(value){
+  if(!searchTerm) return true;
+  return value.toLowerCase().includes(searchTerm.toLowerCase());
+}
+// does this branch (or any descendant) contain a match, given records already filtered up to this point
+function branchHasMatch(records, levelIndex){
+  if(!searchTerm) return true;
+  const levels = levelsForModa();
+  for(let i=levelIndex;i<levels.length;i++){
+    const field = LEVEL_FIELD[levels[i]];
+    if(records.some(r => matchesSearch(r[field]))) return true;
+  }
+  return false;
+}
+
+function buildLevelHTML(records, levelIndex, pathValues, chartJobs, depth){
+  const levels = levelsForModa();
+  if(levelIndex >= levels.length) return '';
+  const field = LEVEL_FIELD[levels[levelIndex]];
+  const icon = LEVEL_ICON[levels[levelIndex]];
+  const counts = {};
+  records.forEach(r => { counts[r[field]] = (counts[r[field]]||0)+1; });
+  let groups = Object.keys(counts).map(v => ({value:v, count:counts[v]})).sort((a,b)=>b.count-a.count);
+
+  if(searchTerm){
+    groups = groups.filter(g => {
+      if(matchesSearch(g.value)) return true;
+      const subset = records.filter(r => r[field]===g.value);
+      return branchHasMatch(subset, levelIndex+1);
+    });
+  }
+  if(!groups.length) return '';
+
+  let html = '';
+  groups.forEach(g => {
+    const path = [...pathValues, g.value];
+    const pathKey = path.join('||');
+    const expanded = expandedPaths.has(pathKey);
+    const subset = records.filter(r => r[field]===g.value);
+    const s = statsOf(subset);
+    const indent = 16 + depth*22;
+    html += `<div class="acc-row ${expanded?'expanded':''}" style="padding-left:${indent}px" data-pathkey="${pathKey.replace(/"/g,'&quot;')}">
+      <span class="chevron">${expanded?'▾':'▸'}</span>
+      <span class="acc-icon">${icon}</span>
+      <span class="acc-name">${g.value}</span>
+      <span class="acc-avg">avg ${s.avg.toFixed(1)}h</span>
+      <span class="acc-count">${g.count.toLocaleString('id-ID')} trip</span>
+    </div>`;
+    if(expanded){
+      const canvasId = sanitizeId(pathKey);
+      chartJobs.push({canvasId, records: subset, key: pathKey});
+      const nextHTML = buildLevelHTML(subset, levelIndex+1, path, chartJobs, depth+1);
+      html += `<div class="acc-detail">
+        <div class="mini-kpi">
+          <span class="mk">Total <b>${s.total.toLocaleString('id-ID')}</b></span>
+          <span class="mk">Rata-rata <b>${s.avg.toFixed(1)} hari</b></span>
+          <span class="mk">Median <b>${s.median.toFixed(1)} hari</b></span>
+          <span class="mk">Maks <b>${s.max} hari</b></span>
+        </div>
+        <div class="mini-chart-box"><canvas id="${canvasId}"></canvas></div>
+        ${nextHTML ? nextHTML : '<div class="no-more" style="padding-left:'+(indent+22)+'px">— level breakdown terakhir —</div>'}
+      </div>`;
+    }
+  });
+  return html;
+}
+
+function renderTree(){
+  const levels = currentModa === 'LAND' ? 'Origin → Tujuan → Vendor → Type Armada' : 'Origin → Tujuan → Vendor';
+  document.getElementById('breakdownDesc').textContent = 'Dikelompokkan per ' + levels + '. Klik baris untuk buka Pareto-nya.';
+  const baseRecords = getBaseRecords();
+  const chartJobs = [];
+  const html = buildLevelHTML(baseRecords, 0, [], chartJobs, 0);
+  const root = document.getElementById('accRoot');
+  root.innerHTML = html || '<div class="empty-state" style="height:120px;">Tidak ada hasil untuk pencarian ini</div>';
+
+  // clean up destroyed charts no longer in DOM
+  const activeKeys = new Set(chartJobs.map(j=>j.key));
+  Object.keys(chartRegistry).forEach(k => {
+    if(k !== '__total__' && !activeKeys.has(k)){ chartRegistry[k].destroy(); delete chartRegistry[k]; }
+  });
+  chartJobs.forEach(job => {
+    const entries = computePareto(job.records);
+    drawChart(job.canvasId, entries, job.key);
+  });
+}
+
+function renderTotalChart(){
+  document.getElementById('totalTitle').textContent = 'Pareto Total — ' + currentModa;
+  const baseRecords = getBaseRecords();
+  const entries = computePareto(baseRecords);
+  drawChart('totalChart', entries, '__total__');
+}
+
+function renderAll(){
+  const baseRecords = getBaseRecords();
+  renderKPIs(baseRecords);
+  renderTotalChart();
+  renderTree();
+  updateFilterCount();
+}
+
+// ---------- Events ----------
+document.getElementById('modaSwitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-moda]'); if(!btn) return;
+  currentModa = btn.dataset.moda;
+  document.querySelectorAll('#modaSwitch button').forEach(b => b.classList.toggle('active', b===btn));
+  expandedPaths = new Set();
+  renderAll();
+});
+
+document.getElementById('sortToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-sort]'); if(!btn) return;
+  sortMode = btn.dataset.sort;
+  document.querySelectorAll('#sortToggle button').forEach(b => b.classList.toggle('active', b===btn));
+  renderAll();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+document.getElementById('accRoot').addEventListener('click', (e) => {
+  const row = e.target.closest('.acc-row'); if(!row) return;
+  const key = row.dataset.pathkey;
+  if(expandedPaths.has(key)) expandedPaths.delete(key); else expandedPaths.add(key);
+  renderTree();
+});
+
+let searchDebounce;
+document.getElementById('treeSearch').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => { searchTerm = e.target.value.trim(); renderTree(); }, 200);
+});
+
+loadData();
+</script>
+</body>
+</html>
