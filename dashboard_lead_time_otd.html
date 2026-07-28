@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Lead Time OTD — Pareto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6fb;
+    --surface:#ffffff;
+    --border:#e4e9f2;
+    --text:#131a2b;
+    --text-dim:#5b667a;
+    --text-faint:#8b95a8;
+    --navy:#1a2e6b;
+    --navy-soft:#233a82;
+    --accent:#2563eb;
+    --accent-soft:#e8effe;
+    --land:#2563eb;
+    --land-soft:#e8effe;
+    --sea:#0891b2;
+    --sea-soft:#e3f6fa;
+    --green:#16a34a;
+    --amber:#d97706;
+    --red:#dc2626;
+    --radius:14px;
+    --radius-sm:10px;
+    --shadow:0 1px 2px rgba(20,30,60,.04), 0 8px 24px -12px rgba(20,30,60,.10);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#c7cfe0;border-radius:8px;}
+
+  .topbar{
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+    padding:22px 28px;
+    color:#fff;
+    display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  .topbar h1{margin:0; font-size:19px; font-weight:800; letter-spacing:-.01em;}
+  .topbar .sub{margin:3px 0 0; font-size:12.5px; color:#c3cdec; font-weight:500;}
+  .topbar-right{display:flex; align-items:center; gap:10px;}
+  .status-pill{
+    display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14);
+    padding:6px 12px; border-radius:99px; font-size:11.5px; color:#dbe3f7; font-weight:500;
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+  .status-dot.loading{background:var(--amber); animation:pulse 1.2s infinite;}
+  .status-dot.error{background:var(--red);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .btn-refresh{
+    background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); color:#fff;
+    padding:7px 14px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:6px; font-family:inherit;
+  }
+  .btn-refresh:hover{background:rgba(255,255,255,.18);}
+  .btn-refresh svg{width:13px;height:13px;}
+
+  .moda-switch{display:flex; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14); border-radius:11px; padding:3px;}
+  .moda-switch button{
+    border:none; background:transparent; color:#c3cdec; font-family:inherit; font-weight:700; font-size:13px;
+    padding:8px 18px; border-radius:8px; cursor:pointer; letter-spacing:.02em; transition:.15s;
+  }
+  .moda-switch button.active{background:#fff; color:var(--navy);}
+
+  .wrap{max-width:1320px; margin:0 auto; padding:22px 28px 60px;}
+
+  .filterbar{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; box-shadow:var(--shadow); margin-bottom:20px;
+  }
+  .filter-group{display:flex; flex-direction:column; gap:5px;}
+  .filter-group label{font-size:10.5px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em;}
+  .msel{position:relative;}
+  .msel-btn{
+    display:flex; align-items:center; gap:8px; background:#f8f9fc; border:1px solid var(--border);
+    padding:8px 12px; border-radius:9px; font-family:inherit; font-size:12.5px; font-weight:600; color:var(--text);
+    cursor:pointer; min-width:150px; justify-content:space-between;
+  }
+  .msel-btn:hover{border-color:#c7cfe0;}
+  .msel-btn .count-badge{background:var(--accent); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:99px; margin-left:4px;}
+  .msel-btn svg{width:12px; height:12px; flex-shrink:0; color:var(--text-faint);}
+  .msel-panel{
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:40;
+    background:#fff; border:1px solid var(--border); border-radius:11px; box-shadow:0 12px 32px -8px rgba(20,30,60,.22);
+    width:250px; max-height:320px; overflow:hidden; flex-direction:column;
+  }
+  .msel.open .msel-panel{display:flex;}
+  .msel-search{border:none; border-bottom:1px solid var(--border); padding:10px 12px; font-family:inherit; font-size:12.5px; outline:none; width:100%;}
+  .msel-actions{display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid var(--border);}
+  .msel-actions button{border:none; background:var(--accent-soft); color:var(--accent); font-size:10.5px; font-weight:700; padding:4px 9px; border-radius:6px; cursor:pointer; font-family:inherit;}
+  .msel-list{overflow-y:auto; padding:5px 4px;}
+  .msel-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12.5px;}
+  .msel-item:hover{background:#f4f6fb;}
+  .msel-item input{accent-color:var(--accent);}
+  .msel-item .cnt{margin-left:auto; color:var(--text-faint); font-size:10.5px; font-family:'JetBrains Mono',monospace;}
+  .btn-reset{
+    background:transparent; border:1px dashed #c7cfe0; color:var(--text-dim); font-size:12px; font-weight:600;
+    padding:8px 13px; border-radius:9px; cursor:pointer; font-family:inherit; height:fit-content;
+  }
+  .btn-reset:hover{border-color:var(--accent); color:var(--accent);}
+  .filter-info{margin-left:auto; font-size:12px; color:var(--text-faint); align-self:center; font-weight:600;}
+  .filter-info b{color:var(--text);}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px;}
+  .kpi-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow);}
+  .kpi-card .kpi-label{font-size:10.5px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;}
+  .kpi-card .kpi-val{font-size:24px; font-weight:800; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;}
+  .kpi-card .kpi-sub{font-size:11.5px; color:var(--text-dim); margin-top:3px; font-weight:500;}
+
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden;}
+  .panel-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px 4px; flex-wrap:wrap; gap:10px;}
+  .panel-head h2{font-size:14.5px; font-weight:800; margin:0;}
+  .panel-head .desc{font-size:11.5px; color:var(--text-faint); margin-top:2px; font-weight:500;}
+  .sort-toggle{display:flex; background:#f1f3f9; border-radius:9px; padding:3px; gap:2px;}
+  .sort-toggle button{border:none; background:transparent; font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; color:var(--text-dim);}
+  .sort-toggle button.active{background:#fff; color:var(--accent); box-shadow:0 1px 2px rgba(20,30,60,.08);}
+  .chart-box{padding:14px 16px 20px; height:340px; position:relative;}
+  .empty-state{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-faint); gap:6px; font-size:13px;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  thead th{
+    text-align:left; padding:9px 16px; font-size:10.5px; font-weight:700; color:var(--text-faint);
+    text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; white-space:nowrap;
+    background:#fafbfd; position:sticky; top:0;
+  }
+  thead th:hover{color:var(--accent);}
+  thead th .arrow{font-size:9px; margin-left:3px; opacity:.5;}
+  tbody td{padding:8px 16px; border-bottom:1px solid #f0f2f8; font-family:'JetBrains Mono',monospace; font-size:12px;}
+  tbody td.name-cell{font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; font-size:12.5px;}
+  tbody tr:hover{background:#f8f9fd;}
+  .table-scroll{max-height:360px; overflow-y:auto;}
+  .bar-cell{display:flex; align-items:center; gap:8px;}
+  .bar-track{flex:1; height:6px; background:#eef1f8; border-radius:99px; overflow:hidden; min-width:50px;}
+  .bar-fill{height:100%; border-radius:99px;}
+  .tabs-2{display:flex; gap:6px; padding:14px 20px 0;}
+  .tabs-2 button{
+    border:1px solid var(--border); background:#fafbfd; color:var(--text-dim); font-family:inherit; font-size:12px; font-weight:700;
+    padding:7px 14px; border-radius:9px 9px 0 0; cursor:pointer; border-bottom:none; position:relative; top:1px;
+  }
+  .tabs-2 button.active{background:#fff; color:var(--accent); border-color:var(--border); border-bottom:1px solid #fff;}
+
+  .loading-overlay{position:fixed; inset:0; background:rgba(244,246,251,.9); z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px;}
+  .spinner{width:34px; height:34px; border:3px solid #dbe3f7; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-overlay p{font-size:13px; font-weight:600; color:var(--text-dim); margin:0;}
+  .err-box{background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:14px 18px; border-radius:12px; font-size:13px; font-weight:500; margin-bottom:20px; display:none;}
+
+  @media (max-width:1000px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p id="loadingText">Memuat data pengiriman…</p>
+</div>
+
+<div class="topbar">
+  <div>
+    <h1>Lead Time OTD — Pareto Dashboard</h1>
+    <p class="sub">Distribusi kejadian per nilai lead time, per tujuan &amp; vendor</p>
+  </div>
+  <div class="topbar-right">
+    <div class="moda-switch" id="modaSwitch">
+      <button data-moda="LAND" class="active">🚚 LAND</button>
+      <button data-moda="SEA">🚢 SEA</button>
+    </div>
+    <div class="status-pill"><span class="status-dot loading" id="statusDot"></span><span id="statusText">Memuat…</span></div>
+    <button class="btn-refresh" id="refreshBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="err-box" id="errBox"></div>
+
+  <div class="filterbar" id="filterBar"></div>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 id="paretoTitle">Pareto Lead Time — LAND</h2>
+        <p class="desc" id="paretoDesc">Jumlah kejadian pada tiap nilai lead time (hari)</p>
+      </div>
+      <div class="sort-toggle" id="sortToggle">
+        <button data-sort="trend" class="active">Trend (urut hari)</button>
+        <button data-sort="pareto">Pareto klasik (urut frekuensi)</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="paretoChart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Tabel Lead Time</h2>
+        <p class="desc">Rincian jumlah &amp; persentase kumulatif per nilai lead time</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th data-key="lt">Lead Time (Hari) <span class="arrow"></span></th>
+          <th data-key="count">Jumlah Kejadian <span class="arrow"></span></th>
+          <th data-key="pct">% dari Total <span class="arrow"></span></th>
+          <th data-key="cum">% Kumulatif <span class="arrow"></span></th>
+        </tr></thead>
+        <tbody id="ltTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs-2" id="rankTabs">
+      <button data-group="Tujuan" class="active">Per Tujuan</button>
+      <button data-group="Vendor">Per Vendor</button>
+      <button data-group="Armada" id="armadaTabBtn">Per Armada</button>
+    </div>
+    <div class="panel-head" style="padding-top:12px;">
+      <div>
+        <h2 id="rankTitle">Ranking per Tujuan</h2>
+        <p class="desc">Diurutkan dari rata-rata lead time tertinggi. Klik header untuk sort lain.</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th data-rkey="name">Nama <span class="arrow"></span></th>
+          <th data-rkey="count">Trip <span class="arrow"></span></th>
+          <th data-rkey="avg">Rata-rata LT <span class="arrow"></span></th>
+          <th data-rkey="median">Median LT <span class="arrow"></span></th>
+          <th data-rkey="max">Max LT <span class="arrow"></span></th>
+        </tr></thead>
+        <tbody id="rankTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="text-align:center; font-size:11px; color:var(--text-faint); margin-top:10px;">Data live dari Google Sheets (published CSV) · Kolom Lead Time = kolom AL</p>
+</div>
+
+<script>
+const CONFIG = {
+  CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTRWYcIMfbq-0rmBOhXbbuw9aK2-HFgDp1DQ_lZm5h43mdyMLGEHJZo3uUOrxalZpAfFbvD_b-52hvD/pub?gid=1697954294&single=true&output=csv',
+};
+
+// ---------- CSV parsing ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if(inQuotes){
+      if(c === '"' && n === '"'){ field+='"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\r'){ /* skip */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+// ---------- State ----------
+let RECORDS = [];       // all valid LAND/SEA records
+let currentModa = 'LAND';
+let sortMode = 'trend'; // trend | pareto
+let rankGroup = 'Tujuan';
+let rankSort = {key:'avg', dir:'desc'};
+let ltSort = null; // uses sortMode by default
+
+const sel = { Vendor: new Set(), Tujuan: new Set(), Armada: new Set() };
+let msels = {};
+
+// ---------- Load data ----------
+async function loadData(){
+  setStatus('loading', 'Memuat…');
+  document.getElementById('errBox').style.display = 'none';
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  try{
+    const res = await fetch(CONFIG.CSV_URL + (CONFIG.CSV_URL.includes('?') ? '&' : '?') + 'cachebust=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const header = rows[0].map(h => h.trim());
+    const idx = name => header.indexOf(name);
+    const iVendor = idx('Vendor'), iTujuan = idx('Tujuan'), iModa = idx('Moda'), iType = idx('TYPE'), iLT = idx('Lead Time');
+    if(iLT === -1) throw new Error("Kolom 'Lead Time' tidak ditemukan di header CSV");
+
+    const recs = [];
+    for(let r=1;r<rows.length;r++){
+      const row = rows[r];
+      if(!row || row.length < 2) continue;
+      let moda = (row[iModa]||'').trim().toUpperCase();
+      if(moda !== 'LAND' && moda !== 'SEA') continue;
+      const ltRaw = (row[iLT]||'').trim();
+      if(ltRaw === '') continue;
+      const lt = Number(ltRaw);
+      if(!isFinite(lt)) continue;
+      recs.push({
+        vendor: (row[iVendor]||'(Kosong)').trim() || '(Kosong)',
+        tujuan: (row[iTujuan]||'(Kosong)').trim() || '(Kosong)',
+        moda,
+        armada: (row[iType]||'(Kosong)').trim() || '(Kosong)',
+        lt
+      });
+    }
+    RECORDS = recs;
+    setStatus('ok', 'Live · ' + RECORDS.length.toLocaleString('id-ID') + ' baris valid');
+    buildFilters();
+    renderAll();
+  } catch(e){
+    console.error(e);
+    setStatus('error', 'Gagal memuat');
+    const box = document.getElementById('errBox');
+    box.style.display = 'block';
+    box.textContent = 'Gagal memuat data dari Google Sheets: ' + e.message + '. Pastikan sheet sudah "Publish to web" sebagai CSV dan link masih aktif, lalu klik Refresh.';
+  } finally {
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+}
+
+function setStatus(state, text){
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (state==='loading' ? ' loading' : state==='error' ? ' error' : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+// ---------- Filters ----------
+function buildFilters(){
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = '';
+  const isLand = currentModa === 'LAND';
+
+  const groups = [
+    {key:'Vendor', label:'Vendor'},
+    {key:'Tujuan', label:'Tujuan'},
+  ];
+  if(isLand) groups.push({key:'Armada', label:'Type Armada'});
+
+  groups.forEach(g => {
+    const fg = document.createElement('div');
+    fg.className = 'filter-group';
+    fg.innerHTML = `<label>${g.label}</label><div class="msel" id="msel_${g.key}"></div>`;
+    bar.appendChild(fg);
+  });
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'btn-reset';
+  resetBtn.textContent = '↺ Reset Filter';
+  resetBtn.onclick = () => { sel.Vendor.clear(); sel.Tujuan.clear(); sel.Armada.clear(); buildFilters(); renderAll(); };
+  bar.appendChild(resetBtn);
+
+  const info = document.createElement('div');
+  info.className = 'filter-info';
+  info.id = 'filterInfo';
+  bar.appendChild(info);
+
+  const base = RECORDS.filter(r => r.moda === currentModa);
+  groups.forEach(g => {
+    const counts = {};
+    base.forEach(r => { const v = r[g.key.toLowerCase()]; counts[v] = (counts[v]||0)+1; });
+    const options = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).map(v => ({value:v, count:counts[v]}));
+    mountMultiSelect(g.key, options, g.label);
+  });
+}
+
+function mountMultiSelect(key, options, label){
+  const root = document.getElementById('msel_'+key);
+  root.className = 'msel';
+  const selectedSet = sel[key];
+  const render = () => {
+    const n = selectedSet.size;
+    root.innerHTML = `
+      <button class="msel-btn" type="button">
+        <span>${label}${n? '' : ': Semua'}</span>
+        ${n? `<span class="count-badge">${n}</span>`:''}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="msel-panel">
+        <input class="msel-search" placeholder="Cari ${label.toLowerCase()}…">
+        <div class="msel-actions">
+          <button data-act="all">Pilih Semua</button>
+          <button data-act="none">Hapus Semua</button>
+        </div>
+        <div class="msel-list"></div>
+      </div>`;
+    const list = root.querySelector('.msel-list');
+    const drawList = (filterStr='') => {
+      list.innerHTML = '';
+      options.filter(o => o.value.toLowerCase().includes(filterStr.toLowerCase())).forEach(o => {
+        const item = document.createElement('label');
+        item.className = 'msel-item';
+        item.innerHTML = `<input type="checkbox" ${selectedSet.has(o.value)?'checked':''}> <span>${o.value}</span> <span class="cnt">${o.count}</span>`;
+        item.querySelector('input').addEventListener('change', (e) => {
+          if(e.target.checked) selectedSet.add(o.value); else selectedSet.delete(o.value);
+          render();
+          renderAll();
+        });
+        list.appendChild(item);
+      });
+    };
+    drawList();
+    root.querySelector('.msel-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.msel.open').forEach(m => { if(m!==root) m.classList.remove('open'); });
+      root.classList.toggle('open');
+    });
+    root.querySelector('.msel-search').addEventListener('input', (e) => drawList(e.target.value));
+    root.querySelector('[data-act="all"]').addEventListener('click', () => { options.forEach(o=>selectedSet.add(o.value)); render(); renderAll(); });
+    root.querySelector('[data-act="none"]').addEventListener('click', () => { selectedSet.clear(); render(); renderAll(); });
+  };
+  render();
+  msels[key] = { render };
+}
+document.addEventListener('click', () => document.querySelectorAll('.msel.open').forEach(m => m.classList.remove('open')));
+
+// ---------- Derived data ----------
+function getFiltered(){
+  return RECORDS.filter(r => {
+    if(r.moda !== currentModa) return false;
+    if(sel.Vendor.size && !sel.Vendor.has(r.vendor)) return false;
+    if(sel.Tujuan.size && !sel.Tujuan.has(r.tujuan)) return false;
+    if(currentModa === 'LAND' && sel.Armada.size && !sel.Armada.has(r.armada)) return false;
+    return true;
+  });
+}
+
+function median(arr){
+  const s = [...arr].sort((a,b)=>a-b);
+  const n = s.length;
+  if(!n) return 0;
+  const mid = Math.floor(n/2);
+  return n%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+
+function computePareto(filtered){
+  const counts = {};
+  filtered.forEach(r => { counts[r.lt] = (counts[r.lt]||0)+1; });
+  let entries = Object.keys(counts).map(k => ({lt:Number(k), count:counts[k]}));
+  const total = filtered.length;
+  if(sortMode === 'trend'){
+    entries.sort((a,b)=>a.lt-b.lt);
+  } else {
+    entries.sort((a,b)=>b.count-a.count || a.lt-b.lt);
+  }
+  let cum = 0;
+  entries.forEach(e => {
+    cum += e.count;
+    e.pct = total? (e.count/total*100) : 0;
+    e.cum = total? (cum/total*100) : 0;
+  });
+  return entries;
+}
+
+// ---------- KPI ----------
+function renderKPIs(filtered){
+  const row = document.getElementById('kpiRow');
+  const lts = filtered.map(r=>r.lt);
+  const total = filtered.length;
+  const avg = total ? lts.reduce((a,b)=>a+b,0)/total : 0;
+  const med = median(lts);
+  const max = total ? Math.max(...lts) : 0;
+  const counts = {};
+  lts.forEach(v => counts[v]=(counts[v]||0)+1);
+  let modeVal = '-', modeCount = 0;
+  Object.keys(counts).forEach(k => { if(counts[k] > modeCount){ modeCount = counts[k]; modeVal = k; }});
+  const modePct = total ? (modeCount/total*100) : 0;
+  const accent = currentModa === 'LAND' ? 'var(--land)' : 'var(--sea)';
+
+  const cards = [
+    {label:'Total Shipment', val: total.toLocaleString('id-ID'), sub: currentModa + ' · sesuai filter'},
+    {label:'Rata-rata Lead Time', val: avg.toFixed(1) + ' hari', sub:'mean'},
+    {label:'Median Lead Time', val: med.toFixed(1) + ' hari', sub:'nilai tengah'},
+    {label:'Lead Time Terbanyak', val: modeVal + ' hari', sub: modeCount.toLocaleString('id-ID') + ' kejadian (' + modePct.toFixed(1) + '%)'},
+    {label:'Lead Time Maks', val: max + ' hari', sub:'nilai tertinggi pada filter ini'},
+  ];
+  row.innerHTML = cards.map(c => `
+    <div class="kpi-card">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-val" style="color:${accent}">${c.val}</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+// ---------- Pareto chart ----------
+let paretoChart = null;
+function renderChart(entries){
+  const box = document.getElementById('paretoChart').parentElement;
+  document.getElementById('paretoTitle').textContent = 'Pareto Lead Time — ' + currentModa;
+  if(!entries.length){
+    box.innerHTML = '<div class="empty-state"><span style="font-size:26px;">📭</span>Tidak ada data untuk kombinasi filter ini</div>';
+    paretoChart = null;
+    return;
+  }
+  if(!document.getElementById('paretoChart')){
+    box.innerHTML = '<canvas id="paretoChart"></canvas>';
+  }
+  const ctx = document.getElementById('paretoChart').getContext('2d');
+  const barColor = currentModa === 'LAND' ? '#2563eb' : '#0891b2';
+  const lineColor = '#d97706';
+  const labels = entries.map(e => e.lt + (sortMode==='pareto' ? '' : ''));
+  const data = {
+    labels,
+    datasets: [
+      {
+        type:'bar',
+        label:'Jumlah Kejadian',
+        data: entries.map(e=>e.count),
+        backgroundColor: barColor + 'cc',
+        borderRadius:4,
+        yAxisID:'y',
+        order:2,
+      },
+      {
+        type:'line',
+        label:'% Kumulatif',
+        data: entries.map(e=>e.cum),
+        borderColor: lineColor,
+        backgroundColor: lineColor,
+        borderWidth:2.5,
+        pointRadius:3,
+        pointBackgroundColor:'#fff',
+        pointBorderColor: lineColor,
+        pointBorderWidth:2,
+        tension:.25,
+        yAxisID:'y1',
+        order:1,
+      }
+    ]
+  };
+  if(paretoChart){ paretoChart.destroy(); }
+  paretoChart = new Chart(ctx, {
+    data,
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{position:'top', align:'end', labels:{boxWidth:11, font:{family:"'Plus Jakarta Sans'", size:11.5, weight:600}, usePointStyle:true}},
+        tooltip:{
+          backgroundColor:'#131a2b', padding:10, cornerRadius:8, titleFont:{family:"'Plus Jakarta Sans'", weight:700}, bodyFont:{family:"'JetBrains Mono'"},
+          callbacks:{
+            title: (items) => 'Lead Time: ' + items[0].label + ' hari',
+            label: (item) => item.dataset.yAxisID === 'y1' ? '% Kumulatif: ' + item.parsed.y.toFixed(1) + '%' : 'Kejadian: ' + item.parsed.y.toLocaleString('id-ID')
+          }
+        }
+      },
+      scales:{
+        x:{ title:{display:true, text: sortMode==='trend' ? 'Lead Time (hari)' : 'Lead Time (hari) — diurutkan per frekuensi', font:{family:"'Plus Jakarta Sans'", size:11, weight:600}}, grid:{display:false}, ticks:{font:{family:"'JetBrains Mono'", size:10.5}} },
+        y:{ position:'left', title:{display:true, text:'Jumlah Kejadian', font:{family:"'Plus Jakarta Sans'", size:11, weight:600}}, grid:{color:'#eef1f8'}, beginAtZero:true, ticks:{font:{family:"'JetBrains Mono'", size:10.5}} },
+        y1:{ position:'right', title:{display:true, text:'% Kumulatif', font:{family:"'Plus Jakarta Sans'", size:11, weight:600}}, grid:{display:false}, min:0, max:100, ticks:{callback:v=>v+'%', font:{family:"'JetBrains Mono'", size:10.5}} },
+      }
+    }
+  });
+}
+
+// ---------- Lead time table ----------
+function renderLTTable(entries){
+  const body = document.getElementById('ltTableBody');
+  if(!entries.length){ body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-faint); padding:24px;">Tidak ada data</td></tr>'; return; }
+  const barColor = currentModa === 'LAND' ? '#2563eb' : '#0891b2';
+  body.innerHTML = entries.map(e => `
+    <tr>
+      <td class="name-cell">${e.lt} hari</td>
+      <td>${e.count.toLocaleString('id-ID')}</td>
+      <td><div class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${e.pct}%; background:${barColor}"></div></div><span>${e.pct.toFixed(1)}%</span></div></td>
+      <td>${e.cum.toFixed(1)}%</td>
+    </tr>`).join('');
+}
+
+// ---------- Ranking table ----------
+function renderRankTable(filtered){
+  document.getElementById('rankTitle').textContent = 'Ranking per ' + rankGroup;
+  const key = rankGroup.toLowerCase();
+  const groups = {};
+  filtered.forEach(r => {
+    const g = r[key];
+    if(!groups[g]) groups[g] = [];
+    groups[g].push(r.lt);
+  });
+  let rows = Object.keys(groups).map(name => {
+    const arr = groups[name];
+    const count = arr.length;
+    const avg = arr.reduce((a,b)=>a+b,0)/count;
+    return { name, count, avg, median: median(arr), max: Math.max(...arr) };
+  });
+  rows.sort((a,b) => {
+    const dir = rankSort.dir === 'asc' ? 1 : -1;
+    const k = rankSort.key;
+    if(k === 'name') return a.name.localeCompare(b.name) * dir;
+    return (a[k]-b[k]) * dir;
+  });
+  const body = document.getElementById('rankTableBody');
+  if(!rows.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-faint); padding:24px;">Tidak ada data</td></tr>'; return; }
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td class="name-cell">${r.name}</td>
+      <td>${r.count.toLocaleString('id-ID')}</td>
+      <td>${r.avg.toFixed(1)} hari</td>
+      <td>${r.median.toFixed(1)} hari</td>
+      <td>${r.max} hari</td>
+    </tr>`).join('');
+
+  document.querySelectorAll('[data-rkey]').forEach(th => {
+    const arrow = th.querySelector('.arrow');
+    arrow.textContent = th.dataset.rkey === rankSort.key ? (rankSort.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
+// ---------- Master render ----------
+function renderAll(){
+  const filtered = getFiltered();
+  renderKPIs(filtered);
+  const entries = computePareto(filtered);
+  renderChart(entries);
+  renderLTTable(entries);
+  renderRankTable(filtered);
+  const info = document.getElementById('filterInfo');
+  if(info) info.innerHTML = `Menampilkan <b>${filtered.length.toLocaleString('id-ID')}</b> dari <b>${RECORDS.filter(r=>r.moda===currentModa).length.toLocaleString('id-ID')}</b> pengiriman ${currentModa}`;
+}
+
+// ---------- Event bindings ----------
+document.getElementById('modaSwitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-moda]');
+  if(!btn) return;
+  currentModa = btn.dataset.moda;
+  document.querySelectorAll('#modaSwitch button').forEach(b => b.classList.toggle('active', b===btn));
+  sel.Vendor.clear(); sel.Tujuan.clear(); sel.Armada.clear();
+  if(currentModa === 'SEA' && rankGroup === 'Armada') rankGroup = 'Tujuan';
+  document.getElementById('armadaTabBtn').style.display = currentModa === 'LAND' ? 'inline-block' : 'none';
+  document.querySelectorAll('#rankTabs button').forEach(b => b.classList.toggle('active', b.dataset.group===rankGroup));
+  buildFilters();
+  renderAll();
+});
+
+document.getElementById('sortToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-sort]');
+  if(!btn) return;
+  sortMode = btn.dataset.sort;
+  document.querySelectorAll('#sortToggle button').forEach(b => b.classList.toggle('active', b===btn));
+  renderAll();
+});
+
+document.getElementById('rankTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-group]');
+  if(!btn) return;
+  rankGroup = btn.dataset.group;
+  document.querySelectorAll('#rankTabs button').forEach(b => b.classList.toggle('active', b===btn));
+  renderAll();
+});
+
+document.querySelectorAll('[data-rkey]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.rkey;
+    if(rankSort.key === k) rankSort.dir = rankSort.dir === 'asc' ? 'desc' : 'asc';
+    else { rankSort.key = k; rankSort.dir = k === 'name' ? 'asc' : 'desc'; }
+    renderAll();
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+document.getElementById('armadaTabBtn').style.display = 'inline-block';
+
+loadData();
+</script>
+</body>
+</html>
